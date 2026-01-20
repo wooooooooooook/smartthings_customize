@@ -19,9 +19,8 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.config_entry_oauth2_flow import (
-    ImplementationUnavailableError,
     OAuth2Session,
-    async_get_config_entry_implementation,
+    async_get_implementations,
 )
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_send,
@@ -56,6 +55,8 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 ENTITY_ID_FORMAT = DOMAIN + ".{}"
 
+SMARTTHINGS_DOMAIN = "smartthings"
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Initialize the SmartThings Customize platform."""
@@ -89,13 +90,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if CONF_TOKEN not in entry.data:
         raise ConfigEntryAuthFailed("Config entry missing token - please reauthenticate")
     
-    try:
-        implementation = await async_get_config_entry_implementation(hass, entry)
-    except ImplementationUnavailableError as err:
+    implementations = await async_get_implementations(hass, SMARTTHINGS_DOMAIN)
+    implementation_id = entry.data.get("auth_implementation")
+    if implementation_id in implementations:
+        implementation = implementations[implementation_id]
+    elif len(implementations) == 1:
+        implementation = next(iter(implementations.values()))
+    else:
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
             translation_key="oauth2_implementation_unavailable",
-        ) from err
+        )
     
     session = OAuth2Session(hass, entry, implementation)
     
